@@ -57,7 +57,7 @@ def model_train():
     earlyStopping = EarlyStopping(monitor="val_loss", patience=PATIENCE, verbose=1)
 
     # Reduce LR on validation loss plateau
-    reduceLR = ReduceLROnPlateau(monitor="val_loss", patience=PATIENCE, verbose=1)
+    reduceLR = ReduceLROnPlateau(monitor="val_loss", patience=LR_PATIENCE, verbose=1)
 
     # Compile the model
     model.compile(
@@ -78,11 +78,11 @@ def model_train():
 
     # Save model
     print("Saving model")
-    model.save("../models/marvin_kws.h5")
+    model.save(MODEL_DIR + MODEL_FILE)
 
     # Save history data
     print("Saving training history")
-    with open("../models/marvin_kws_history.pickle", "wb") as file:
+    with open(MODEL_DIR + HISTORY_FILE, "wb") as file:
         pickle.dump(history.history, file, protocol=pickle.HIGHEST_PROTOCOL)
 
     plot_history(history=history)
@@ -102,7 +102,7 @@ def marvin_kws_model():
 
     # Obtain dataframe for each dataset
     trainDF = getDataframe(dataDict["train"])
-    valDF = getDataframe(dataDict["val"])
+    valDF = getDataframe(dataDict["val"]).copy()
 
     # Obtain Marvin data from training data
     marvin_data, _ = getDataset(
@@ -120,14 +120,14 @@ def marvin_kws_model():
     val_data, _ = getDataset(df=valDF, batch_size=BATCH_SIZE, cache_file="kws_val_cache", shuffle=False)
 
     # Load model and create feature extractor
-    model = load_model("../models/marvin_kws.h5")
+    model = load_model(MODEL_DIR + MODEL_FILE)
 
     layer_name = "features256"
-    feature_extractor = Model(inputs=model.input, outputs=model.get_layer(layer_name).output)
+    feature_extractor = Model(inputs=model.inputs, outputs=model.get_layer(layer_name).output)
 
     # Obtain the feature embeddings
-    X_train = feature_extractor.predict(marvin_data, use_multiprocessing=True)
-    X_val = feature_extractor.predict(val_data, use_multiprocessing=True)
+    X_train = feature_extractor.predict(marvin_data)
+    X_val = feature_extractor.predict(val_data)
 
     # Apply PCA to reduce dimensionality
     pca = PCA(n_components=32)
@@ -149,10 +149,15 @@ def marvin_kws_model():
     def svm_objective(**params):
         marvin_svm.set_params(**params)
 
-        marvin_svm.fit(X_train_transformed)
+        # Extreme gamma/nu can make libsvm diverge; treat that trial as the worst score
+        try:
+            marvin_svm.fit(X_train_transformed)
+        except ValueError:
+            return 0.0
+
         val_pred_labels = marvin_svm.predict(X_val_transformed)
 
-        score = f1_score(val_pred_labels, val_true_labels)
+        score = f1_score(val_true_labels, val_pred_labels)
 
         return -1 * score
 
@@ -178,9 +183,9 @@ def marvin_kws_model():
     OC_Statistics(val_pred_labels, val_true_labels, "marvin_cm_training")
 
     print("Saving PCA object")
-    with open("../models/marvin_kws_pca.pickle", "wb") as file:
+    with open(MODEL_DIR + PCA_FILE, "wb") as file:
         pickle.dump(pca, file, protocol=pickle.HIGHEST_PROTOCOL)
 
     print("Saving Marvin SVM")
-    with open("../models/marvin_kws_svm.pickle", "wb") as file:
-        pickle.dump(marvin_svm, file, protocol=pickle.HIGHEST_PROTOCOL)
+    with open(MODEL_DIR + SVM_FILE, "wb") as file:
+        pickle.dump(marvin_kws, file, protocol=pickle.HIGHEST_PROTOCOL)

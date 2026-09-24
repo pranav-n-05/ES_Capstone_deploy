@@ -34,24 +34,24 @@ def marvin_model_test():
     evalDF.drop("category", axis=1)
     test_true_labels = evalDF["class"].tolist()
 
-    eval_data, _ = getDataset(df=evalDF, batch_size=BATCH_SIZE, cache_file="kws_val_cache", shuffle=False)
+    eval_data, _ = getDataset(df=evalDF, batch_size=BATCH_SIZE, cache_file="kws_eval_cache", shuffle=False)
 
     # Load trained model
-    model = load_model("../models/marvin_kws.h5")
+    model = load_model(MODEL_DIR + MODEL_FILE)
 
     layer_name = "features256"
-    feature_extractor = Model(inputs=model.input, outputs=model.get_layer(layer_name).output)
+    feature_extractor = Model(inputs=model.inputs, outputs=model.get_layer(layer_name).output)
 
     # Load trained PCA object
-    with open("../models/marvin_kws_pca.pickle", "rb") as file:
+    with open(MODEL_DIR + PCA_FILE, "rb") as file:
         pca = pickle.load(file)
 
     # Load trained SVM
-    with open("../models/marvin_kws_svm.pickle", "rb") as file:
+    with open(MODEL_DIR + SVM_FILE, "rb") as file:
         marvin_svm = pickle.load(file)
 
     # Extract the feature embeddings and evaluate using SVM
-    X_test = feature_extractor.predict(eval_data, use_multiprocessing=True)
+    X_test = feature_extractor.predict(eval_data)
 
     X_test_scaled = pca.transform(X_test)
     test_pred_labels = marvin_svm.predict(X_test_scaled)

@@ -6,6 +6,12 @@ LIBROSA_AUDIO_LENGTH = 22050
 
 EPOCHS = 25
 
+MODEL_DIR = "../models/"
+MODEL_FILE = "marvin_kws.keras"
+PCA_FILE = "marvin_kws_pca.pickle"
+SVM_FILE = "marvin_kws_svm.pickle"
+HISTORY_FILE = "train_history.pickle"
+
 categories = {
     "stop": 0,
     "nine": 1,
@@ -89,4 +95,5 @@ DENSE_2 = 256
 
 BATCH_SIZE = 128
 PATIENCE = 5
+LR_PATIENCE = 3
 LEARNING_RATE = 0.001

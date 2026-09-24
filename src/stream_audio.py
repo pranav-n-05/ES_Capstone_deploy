@@ -50,10 +50,10 @@ class StreamPrediction:
         """
 
         # Load model structure
-        model = load_model(model_path + "/marvin_kws.h5")
+        model = load_model(model_path + "/marvin_kws.keras")
 
         layer_name = "features256"
-        self.feature_extractor = Model(inputs=model.input, outputs=model.get_layer(layer_name).output)
+        self.feature_extractor = Model(inputs=model.inputs, outputs=model.get_layer(layer_name).output)
 
         # Load trained PCA object
         with open(model_path + "/marvin_kws_pca.pickle", "rb") as file:
@@ -77,7 +77,6 @@ class StreamPrediction:
             rate=self.sr,
             input=True,
             frames_per_buffer=self.chunk_samples,
-            input_device_index=6,
             stream_callback=self.callback,
         )
 
@@ -106,7 +105,7 @@ class StreamPrediction:
         """
 
         fbank = np.expand_dims(fbank, axis=0)
-        feature_embeddings = self.feature_extractor.predict(fbank)
+        feature_embeddings = self.feature_extractor.predict(fbank, verbose=0)
 
         feature_embeddings_scaled = self.pca.transform(feature_embeddings)
         prediction = self.marvin_svm.predict(feature_embeddings_scaled)
@@ -161,7 +160,7 @@ class StreamPrediction:
         plt.gca().xaxis.set_major_locator(plt.NullLocator())
         plt.gca().invert_yaxis()
         plt.ylim(0, 40)
-        plt.ylabel("$\log \, E_{m}$")
+        plt.ylabel(r"$\log \, E_{m}$")
 
         # Hotword detection
         plt.subplot(313)

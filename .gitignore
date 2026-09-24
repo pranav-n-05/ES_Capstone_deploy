@@ -144,3 +144,5 @@ dmypy.json
 input/
 
 
+input/speech_commands/
+input/*cache*

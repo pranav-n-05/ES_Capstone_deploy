@@ -1,0 +1,7 @@
+# Raspberry Pi 4/5, 64-bit Raspberry Pi OS (aarch64), Python 3.11+.
+# PyAudio needs PortAudio first: sudo apt install portaudio19-dev
+numpy
+scipy
+python-speech-features==0.6
+ai-edge-litert
+PyAudio

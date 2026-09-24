@@ -6,8 +6,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from sklearn.metrics import accuracy_score, recall_score, matthews_corrcoef
-from sklearn.metrics import precision_score, f1_score, confusion_matrix
-from sklearn.metrics._plot.confusion_matrix import ConfusionMatrixDisplay
+from sklearn.metrics import precision_score, f1_score, confusion_matrix, ConfusionMatrixDisplay
 from python_speech_features import logfbank
 from parameters import *
 
@@ -32,6 +31,9 @@ def getDataset(df, batch_size, cache_file=None, shuffle=True, parse_param=PARSE_
         ),
         num_parallel_calls=os.cpu_count(),
     )
+
+    # py_function drops static shapes; restore them for Keras 3
+    data = data.map(lambda fbank, label: (tf.ensure_shape(fbank, INPUT_SHAPE), tf.ensure_shape(label, [])))
 
     if cache_file:
         data = data.cache("../input/" + cache_file)
@@ -94,8 +96,7 @@ def _normalize(data):
     sd = np.std(data, axis=0)
 
     # If Std Dev is 0
-    if not sd:
-        sd = 1e-7
+    sd[sd == 0] = 1e-7
 
     return (data - mean) / sd
 

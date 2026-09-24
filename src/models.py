@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Reshape, BatchNormalization, Dropout
+from tensorflow.keras.layers import Input, Reshape, BatchNormalization, Dropout
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, ReLU
 from parameters import *
 
@@ -14,7 +14,8 @@ def create_model():
     model = Sequential()
 
     # Normalization layer
-    model.add(Reshape(input_shape=INPUT_SHAPE, target_shape=TARGET_SHAPE))
+    model.add(Input(shape=INPUT_SHAPE))
+    model.add(Reshape(target_shape=TARGET_SHAPE))
     model.add(BatchNormalization())
 
     for num_filters in filters:

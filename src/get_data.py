@@ -17,8 +17,8 @@ def downloadData(data_path="/input/speech_commands/"):
 
     datasets = ["train", "test"]
     urls = [
-        "http://download.tensorflow.org/data/speech_commands_v0.01.tar.gz",
-        "http://download.tensorflow.org/data/speech_commands_test_set_v0.01.tar.gz",
+        "https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_v0.01.tar.gz",
+        "https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_test_set_v0.01.tar.gz",
     ]
 
     for dataset, url in zip(datasets, urls):
@@ -26,7 +26,7 @@ def downloadData(data_path="/input/speech_commands/"):
 
         # Check if we need to extract the dataset
         if not os.path.isdir(dataset_directory):
-            os.makedirs(dataset_directory)
+            os.makedirs(dataset_path, exist_ok=True)
             file_name = dataset_path + dataset + ".tar.gz"
 
             # Check if the dataset has been downloaded, else download it
@@ -35,17 +35,20 @@ def downloadData(data_path="/input/speech_commands/"):
             else:
                 print("Downloading '{}' into '{}' file".format(url, file_name))
 
-                data_request = requests.get(url)
-                with open(file_name, "wb") as file:
-                    file.write(data_request.content)
+                with requests.get(url, stream=True, timeout=60) as data_request:
+                    data_request.raise_for_status()
+                    with open(file_name + ".part", "wb") as file:
+                        for chunk in data_request.iter_content(chunk_size=1 << 20):
+                            file.write(chunk)
+                os.replace(file_name + ".part", file_name)
 
             # Extract downloaded file
             print("Extracting {} into {}".format(file_name, dataset_directory))
 
             if file_name.endswith("tar.gz"):
-                tar = tarfile.open(file_name, "r:gz")
-                tar.extractall(path=dataset_directory)
-                tar.close()
+                with tarfile.open(file_name, "r:gz") as tar:
+                    tar.extractall(path=dataset_directory + ".part", filter="data")
+                os.replace(dataset_directory + ".part", dataset_directory)
             else:
                 print("Unknown format.")
         else:
@@ -65,23 +68,23 @@ def getDataDict(data_path="/input/speech_commands/"):
 
     # Get the validation files
     validation_files = open(data_path + "train/validation_list.txt").read().splitlines()
-    validation_files = [data_path + "train/" + file_name for file_name in validation_files]
+    validation_files = [os.path.normpath(data_path + "train/" + file_name) for file_name in validation_files]
 
     # Get the dev files
     dev_files = open(data_path + "train/testing_list.txt").read().splitlines()
-    dev_files = [data_path + "train/" + file_name for file_name in dev_files]
+    dev_files = [os.path.normpath(data_path + "train/" + file_name) for file_name in dev_files]
 
     # Find train_files as allFiles - {validation_files, dev_files}
     all_files = []
-    for root, dirs, files in os.walk(data_path + "train/"):
-        all_files += [root + "/" + file_name for file_name in files if file_name.endswith(".wav")]
+    for root, dirs, files in os.walk(os.path.normpath(data_path + "train/")):
+        all_files += [os.path.join(root, file_name) for file_name in files if file_name.endswith(".wav")]
 
     train_files = list(set(all_files) - set(validation_files) - set(dev_files))
 
     # Get the test files
     test_files = list()
-    for root, dirs, files in os.walk(data_path + "test/"):
-        test_files += [root + "/" + file_name for file_name in files if file_name.endswith(".wav")]
+    for root, dirs, files in os.walk(os.path.normpath(data_path + "test/")):
+        test_files += [os.path.join(root, file_name) for file_name in files if file_name.endswith(".wav")]
 
     # Get labels
     validation_file_labels = [getLabel(wav) for wav in validation_files]
@@ -107,7 +110,7 @@ def getLabel(file_name):
     :return: Class label
     """
 
-    category = file_name.split("/")[-2]
+    category = os.path.basename(os.path.dirname(file_name))
     label = categories.get(category, categories["_background_noise_"])
 
     return label

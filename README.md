@@ -1,4 +1,4 @@
- ![Language](https://img.shields.io/badge/language-python--3.8-blue) [![Contributors][contributors-shield]][contributors-url] [![Forks][forks-shield]][forks-url] [![Stargazers][stars-shield]][stars-url] [![Issues][issues-shield]][issues-url] [![MIT License][license-shield]][license-url] [![LinkedIn][linkedin-shield]][linkedin-url]
+ ![Language](https://img.shields.io/badge/language-python--3.13-blue) [![Contributors][contributors-shield]][contributors-url] [![Forks][forks-shield]][forks-url] [![Stargazers][stars-shield]][stars-url] [![Issues][issues-shield]][issues-url] [![MIT License][license-shield]][license-url] [![LinkedIn][linkedin-shield]][linkedin-url]
 
 <!-- PROJECT LOGO -->
 <br />
@@ -32,8 +32,9 @@ Keyword Spotting (KWS) provides an efficient solution to all the above issues. M
 ### Built With
 This project was built with 
 
-* python v3.8
-* tensorflow v2.2
+* python v3.13
+* tensorflow v2.21 (Keras 3)
+* scikit-learn v1.9
 * The list of libraries used for developing this project is available at [requirements.txt](requirements.txt).
 
 
@@ -54,8 +55,11 @@ cd Spoken-Keyword-Spotting/src
 Please install required libraries by running the following command (preferably within a virtual environment).
 
 ```shell
+python3.13 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+The CNN is saved in the native Keras format (`models/marvin_kws.keras`). The original Python 3.8 / TensorFlow 2.2 artifacts are kept in [models/legacy_py38](models/legacy_py38) for reference; their scikit-learn 0.22 pickles do not load on the current stack.
 
 The Google Speech Commands dataset is downloaded and setup automatically (if not already present) and hence manual setup is not necessary. 
 
@@ -73,6 +77,35 @@ A continuous speech streaming Keyword Spotting demo is also available in this re
 python stream_audio.py
 ```
 
+
+### Edge deployment (Raspberry Pi)
+
+`export_edge.py` converts the CNN feature extractor to a full-integer (int8) TensorFlow Lite model and stores the PCA + one-class SVM as plain numpy arrays, so the device needs neither TensorFlow nor scikit-learn.
+
+```shell
+cd src
+python export_edge.py   # writes models/marvin_kws_int8.tflite (~940 KB) and models/marvin_kws_svm.npz
+```
+
+| Pipeline | Size | F1 (dev + test) |
+| :-- | :-: | :-: |
+| float32 Keras + sklearn | 11.0 MB | 0.9321 |
+| int8 TFLite + numpy | 0.94 MB | 0.9354 |
+
+On a Raspberry Pi 4/5 running 64-bit Raspberry Pi OS, copy `src/edge_kws.py`, `src/stream_audio_pi.py`, `models/marvin_kws_int8.tflite`, `models/marvin_kws_svm.npz`, `demo/` and `requirements-pi.txt` keeping the same folder layout, then:
+
+```shell
+sudo apt install portaudio19-dev
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-pi.txt
+cd src
+python stream_audio_pi.py --list-devices          # find the USB microphone
+python stream_audio_pi.py                         # live, default microphone
+python stream_audio_pi.py --device 1              # live, specific microphone
+python stream_audio_pi.py --wav ../demo/marvin_demo.wav   # offline backup demo
+```
+
+The Pi has no built-in microphone; use a USB microphone (check it with `arecord -l`). `demo/marvin_demo.wav` is built from dev-set clips (not used in training) and contains "marvin" at 2.0 s, 6.5 s and 11.0 s among other words.
 
 
 ## Model overview
