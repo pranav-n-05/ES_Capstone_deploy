@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import pickle
 import numpy as np
@@ -10,7 +11,13 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from parameters import *
 from utils import _loadfile, _logMelFilterbank
 from get_data import downloadData, getDataDict, getDataframe
+
+# The edge runtime lives in the self-contained Raspberry Pi deployment folder
+EDGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "deploy", "pi")
+sys.path.insert(0, EDGE_DIR)
 from edge_kws import EdgeKWS
+
+EDGE_MODEL_DIR = os.path.join(EDGE_DIR, "models") + "/"
 
 TFLITE_FILE = "marvin_kws_int8.tflite"
 NPZ_FILE = "marvin_kws_svm.npz"
@@ -47,11 +54,11 @@ def export_tflite(feature_extractor, calibration_fbanks):
     converter.representative_dataset = representative_dataset
     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
 
-    with open(MODEL_DIR + TFLITE_FILE, "wb") as file:
+    with open(EDGE_MODEL_DIR + TFLITE_FILE, "wb") as file:
         file.write(converter.convert())
 
     tf.io.gfile.rmtree(saved_model_dir)
-    print("TFLite model size: {:.1f} KB".format(os.path.getsize(MODEL_DIR + TFLITE_FILE) / 1024))
+    print("TFLite model size: {:.1f} KB".format(os.path.getsize(EDGE_MODEL_DIR + TFLITE_FILE) / 1024))
 
 
 def export_svm(pca, marvin_svm):
@@ -63,7 +70,7 @@ def export_svm(pca, marvin_svm):
     """
 
     np.savez(
-        MODEL_DIR + NPZ_FILE,
+        EDGE_MODEL_DIR + NPZ_FILE,
         pca_mean=pca.mean_.astype(np.float32),
         pca_components=pca.components_.astype(np.float32),
         support_vectors=marvin_svm.support_vectors_.astype(np.float32),
@@ -119,7 +126,7 @@ def main():
     float_embeddings = feature_extractor.predict(eval_fbanks, batch_size=BATCH_SIZE, verbose=0)
     float_pred = marvin_svm.predict(pca.transform(float_embeddings))
 
-    edge = EdgeKWS(MODEL_DIR.rstrip("/"))
+    edge = EdgeKWS(EDGE_MODEL_DIR)
     numpy_svm_pred = np.where(edge.decision(float_embeddings) >= 0, 1, -1)
     print("numpy SVM agrees with sklearn on {:.4%} of clips".format(np.mean(numpy_svm_pred == float_pred)))
 

@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marvin KWS · Raspberry Pi</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E🎙️%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f4f6f5; --panel: #ffffff; --sunk: #eceff0; --ink: #15191d; --muted: #5b6770;
+    --line: #d9dfe1; --accent: #0f6f66; --accent-soft: #e0f0ec; --hit: #1f9d55; --hit-soft: #dcf5e6;
+    --miss: #b3361b; --miss-soft: #fbe6df; --warn: #9c7a0b;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101418; --panel: #182027; --sunk: #1f2830; --ink: #e6ebee; --muted: #98a4ad;
+      --line: #2a343d; --accent: #45bfae; --accent-soft: #10312d; --hit: #3fd07e; --hit-soft: #11331f;
+      --miss: #ef8a66; --miss-soft: #3a1d14; --warn: #dfb755;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 18px; margin: 0 12px 0 0; }
+  .pill { font: 12px var(--mono); padding: 3px 9px; border-radius: 999px; background: var(--sunk); color: var(--muted); }
+  .pill.on { background: var(--hit-soft); color: var(--hit); }
+  .pill.err { background: var(--miss-soft); color: var(--miss); }
+  main { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; padding: 16px 20px 40px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); padding: 12px; } header { padding: 12px; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  section + section { margin-top: 16px; }
+  h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+  button { font: inherit; font-weight: 600; border: 1px solid var(--line); background: var(--sunk); color: var(--ink); padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+  button.stop { background: var(--miss); border-color: var(--miss); color: #fff; }
+  button:disabled { opacity: .5; cursor: wait; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .indicator { display: grid; place-items: center; height: 150px; border-radius: 10px; background: var(--sunk); margin-bottom: 14px; text-align: center; transition: background .15s; }
+  .indicator .big { font-size: 44px; font-weight: 800; letter-spacing: -.02em; }
+  .indicator .small { color: var(--muted); font: 13px var(--mono); }
+  .indicator.hit { background: var(--hit); color: #fff; }
+  .indicator.hit .small { color: #eafff2; }
+  canvas { width: 100%; display: block; background: var(--sunk); border-radius: 8px; }
+  #score-canvas { height: 140px; } #spec-canvas { height: 110px; } #wave-canvas { height: 70px; } #res-canvas { height: 120px; }
+  .label { font-size: 12px; color: var(--muted); margin: 12px 0 4px; display: flex; justify-content: space-between; }
+  .meter { position: relative; height: 16px; background: var(--sunk); border-radius: 8px; overflow: hidden; }
+  .meter .fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); width: 0; transition: width .1s; }
+  .meter .gate { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--warn); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .field input[type=number], .field select { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); }
+  .field input[type=range] { width: 100%; }
+  .field .val { font: 12px var(--mono); color: var(--ink); float: right; }
+  .hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  td.num { font-family: var(--mono); text-align: right; }
+  .tag { font: 11px var(--mono); padding: 1px 7px; border-radius: 4px; }
+  .tag.yes { background: var(--hit-soft); color: var(--hit); }
+  .tag.no { background: var(--sunk); color: var(--muted); }
+  .tag.pass { background: var(--hit-soft); color: var(--hit); }
+  .tag.fail { background: var(--miss-soft); color: var(--miss); }
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .tabs button { border: none; background: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 12px; color: var(--muted); }
+  .tabs button.active { color: var(--ink); border-bottom-color: var(--accent); }
+  .tab { display: none; } .tab.active { display: block; }
+  .scroll { max-height: 320px; overflow: auto; }
+  .verdict { font-size: 22px; font-weight: 800; margin: 4px 0; }
+  .verdict.yes { color: var(--hit); } .verdict.no { color: var(--muted); }
+  .kv { font: 13px var(--mono); color: var(--muted); }
+  audio { width: 100%; margin-top: 8px; }
+  .error { color: var(--miss); font-size: 13px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎙️ Marvin Keyword Spotting · Raspberry Pi</h1>
+  <span class="pill" id="pill-model">int8 TFLite · 0.94 MB</span>
+  <span class="pill" id="pill-state">idle</span>
+  <span class="pill" id="pill-mic">mic: not opened</span>
+  <span class="pill" id="pill-latency">latency: –</span>
+  <span class="pill" id="pill-conn">connecting…</span>
+</header>
+
+<main>
+  <div>
+    <section>
+      <h2>Live detection (microphone)</h2>
+      <div class="indicator" id="indicator">
+        <div><div class="big" id="ind-big">Stopped</div><div class="small" id="ind-small">Press Start and say “Marvin”</div></div>
+      </div>
+      <div class="row">
+        <button class="primary" id="btn-listen">▶ Start listening</button>
+        <button id="btn-calibrate" title="Stay quiet for 2 seconds">Calibrate noise (2 s)</button>
+        <span class="kv" id="det-count">Detections: 0</span>
+      </div>
+      <div class="label"><span>Input level (1 s window)</span><span id="level-text">–</span></div>
+      <div class="meter"><div class="fill" id="level-fill"></div><div class="gate" id="gate-mark"></div></div>
+      <div class="label"><span>Detection score (last 15 s) · dashed = threshold</span><span id="score-text">–</span></div>
+      <canvas id="score-canvas" height="140"></canvas>
+      <div class="label"><span>Log-Mel filterbank (model input, 40 bands)</span></div>
+      <canvas id="spec-canvas" height="110"></canvas>
+      <div class="label"><span>Waveform (1 s window)</span></div>
+      <canvas id="wave-canvas" height="70"></canvas>
+      <div class="error" id="live-error"></div>
+    </section>
+
+    <section>
+      <h2>Manual tests</h2>
+      <div class="tabs">
+        <button class="active" data-tab="tab-samples">Test clips</button>
+        <button data-tab="tab-selftest">Self-test</button>
+        <button data-tab="tab-record">Record</button>
+        <button data-tab="tab-upload">Upload WAV</button>
+      </div>
+
+      <div class="tab active" id="tab-samples">
+        <p class="hint">Unseen clips from the dataset's dev/test split. Play one, then analyse it.</p>
+        <div class="scroll"><table><thead><tr><th>Clip</th><th>Expected</th><th></th></tr></thead><tbody id="sample-rows"></tbody></table></div>
+      </div>
+
+      <div class="tab" id="tab-selftest">
+        <p class="hint">Runs every test clip through the detector with the current settings.</p>
+        <button class="primary" id="btn-selftest">Run self-test</button>
+        <div id="selftest-summary" class="kv" style="margin-top:10px"></div>
+        <div class="scroll"><table><thead><tr><th>Clip</th><th>Expected</th><th>Got</th><th class="num">Score</th><th>Result</th></tr></thead><tbody id="selftest-rows"></tbody></table></div>
+      </div>
+
+      <div class="tab" id="tab-record">
+        <p class="hint">Records from the INMP441, then analyses the recording (1 s window, 0.25 s hop).</p>
+        <div class="row">
+          <div class="field" style="width:140px"><label>Duration (s)</label><input type="number" id="rec-seconds" value="4" min="1" max="15"></div>
+          <button class="primary" id="btn-record" style="margin-top:18px">● Record &amp; analyse</button>
+        </div>
+      </div>
+
+      <div class="tab" id="tab-upload">
+        <p class="hint">Any .wav file (any sample rate, mono or stereo). It is resampled to 16 kHz.</p>
+        <input type="file" id="upload-file" accept=".wav,audio/wav">
+        <button class="primary" id="btn-upload">Analyse file</button>
+      </div>
+
+      <div id="result" style="display:none; margin-top:16px; border-top:1px solid var(--line); padding-top:12px">
+        <div class="kv" id="res-name"></div>
+        <div class="verdict" id="res-verdict"></div>
+        <div class="kv" id="res-details"></div>
+        <canvas id="res-canvas" height="120" style="margin-top:8px"></canvas>
+        <audio id="res-audio" controls></audio>
+      </div>
+      <div class="error" id="test-error"></div>
+    </section>
+  </div>
+
+  <div>
+    <section>
+      <h2>Settings</h2>
+      <div class="grid2">
+        <div class="field" style="grid-column: 1 / -1"><label>Input device</label><select id="set-device"></select></div>
+        <div class="field"><label>Channel (INMP441 L/R pin)</label>
+          <select id="set-channel"><option value="auto">auto (louder)</option><option value="left">left (L/R → GND)</option><option value="right">right (L/R → 3.3V)</option></select>
+        </div>
+        <div class="field"><label>Auto level</label>
+          <select id="set-auto"><option value="true">on (recommended)</option><option value="false">off (use gain)</option></select>
+        </div>
+        <div class="field" style="grid-column: 1 / -1"><label>Gain <span class="val" id="val-gain"></span></label><input type="range" id="set-gain" min="0" max="40" step="1"></div>
+        <div class="field" style="grid-column: 1 / -1"><label>Detection threshold <span class="val" id="val-threshold"></span></label><input type="range" id="set-threshold" min="-1" max="1" step="0.05"></div>
+        <div class="field"><label>Silence gate (RMS)</label><input type="number" id="set-gate" min="0" step="1"></div>
+        <div class="field"><label>Cooldown (s)</label><input type="number" id="set-cooldown" min="0" step="0.25"></div>
+      </div>
+      <p class="hint">Lower threshold → catches more “Marvin”s but more false alarms. Windows quieter than the gate are skipped as silence; use <b>Calibrate noise</b> in a quiet moment.</p>
+    </section>
+
+    <section>
+      <h2>Detection log</h2>
+      <div class="scroll"><table><thead><tr><th>Time</th><th class="num">Score</th><th class="num">Latency</th></tr></thead><tbody id="log-rows"></tbody></table></div>
+    </section>
+
+    <section>
+      <h2>Pipeline</h2>
+      <p class="kv" style="margin:0">INMP441 (I2S, 24-bit) → 16 kHz mono → 1 s window every 0.25 s → level normalise → log-Mel 99×40 → CNN int8 TFLite → 256-d embedding → PCA 32 → one-class SVM (RBF) → score ≥ threshold ⇒ “Marvin”</p>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+let settings = {}, listening = false, detCount = 0;
+const scoreHistory = [];   // {t, score}
+
+async function api(path, options = {}) {
+  const res = await fetch(path, options);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.error) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function dbfs(r) { return r > 0 ? 20 * Math.log10(r / 32768) : -100; }
+
+// ---------- settings ----------
+function renderSettings(s) {
+  settings = s;
+  $("set-channel").value = s.channel;
+  $("set-auto").value = String(s.auto_level);
+  $("set-gain").value = s.gain_db; $("val-gain").textContent = `+${s.gain_db} dB`;
+  $("set-threshold").value = s.threshold; $("val-threshold").textContent = Number(s.threshold).toFixed(2);
+  $("set-gate").value = s.gate_rms;
+  $("set-cooldown").value = s.cooldown_s;
+  $("set-device").value = s.device === null ? "auto" : String(s.device);
+  const pct = Math.max(0, Math.min(100, (dbfs(s.gate_rms) + 80) / 80 * 100));
+  $("gate-mark").style.left = pct + "%";
+}
+
+async function saveSettings(patch) {
+  try { const st = await api("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) }); applyStatus(st); }
+  catch (e) { $("live-error").textContent = e.message; }
+}
+
+$("set-channel").onchange = (e) => saveSettings({ channel: e.target.value });
+$("set-auto").onchange = (e) => saveSettings({ auto_level: e.target.value === "true" });
+$("set-gain").oninput = (e) => { $("val-gain").textContent = `+${e.target.value} dB`; };
+$("set-gain").onchange = (e) => saveSettings({ gain_db: Number(e.target.value) });
+$("set-threshold").oninput = (e) => { $("val-threshold").textContent = Number(e.target.value).toFixed(2); settings.threshold = Number(e.target.value); };
+$("set-threshold").onchange = (e) => saveSettings({ threshold: Number(e.target.value) });
+$("set-gate").onchange = (e) => saveSettings({ gate_rms: Number(e.target.value) });
+$("set-cooldown").onchange = (e) => saveSettings({ cooldown_s: Number(e.target.value) });
+$("set-device").onchange = (e) => saveSettings({ device: e.target.value });
+
+async function loadDevices() {
+  try {
+    const d = await api("/api/devices");
+    const sel = $("set-device");
+    sel.innerHTML = `<option value="auto">auto${d.suggested !== null ? " (I2S mic #" + d.suggested + ")" : " (system default)"}</option>` +
+      d.devices.map((x) => `<option value="${x.index}">#${x.index} ${x.name} · ${x.channels}ch · ${Math.round(x.default_samplerate)} Hz</option>`).join("");
+    if (!d.devices.length) $("live-error").textContent = "No input devices found. Check wiring and the I2S overlay (see README).";
+    sel.value = settings.device === null || settings.device === undefined ? "auto" : String(settings.device);
+  } catch (e) { $("live-error").textContent = e.message; }
+}
+
+// ---------- status ----------
+function applyStatus(st) {
+  listening = st.listening;
+  renderSettings(st.settings);
+  $("btn-listen").textContent = listening ? "■ Stop" : "▶ Start listening";
+  $("btn-listen").className = listening ? "stop" : "primary";
+  $("pill-state").textContent = listening ? "listening" : "idle";
+  $("pill-state").className = "pill" + (listening ? " on" : "");
+  if (st.mic) $("pill-mic").textContent = `mic: ${st.mic.name.split(":")[0]} · ${st.mic.rate} Hz · ${st.mic.channels}ch · ${st.mic.dtype}`;
+  if (!listening) { $("ind-big").textContent = "Stopped"; $("ind-small").textContent = "Press Start and say “Marvin”"; $("indicator").className = "indicator"; }
+  if (st.detections) renderLog(st.detections);
+}
+
+function renderLog(rows) {
+  $("log-rows").innerHTML = rows.map((d) => `<tr><td>${new Date(d.time * 1000).toLocaleTimeString()}</td><td class="num">${d.score.toFixed(3)}</td><td class="num">${d.latency_ms ? d.latency_ms.toFixed(1) + " ms" : "–"}</td></tr>`).join("");
+}
+
+$("btn-listen").onclick = async () => {
+  $("btn-listen").disabled = true; $("live-error").textContent = "";
+  try { applyStatus(await api(listening ? "/api/listen/stop" : "/api/listen/start", { method: "POST" })); }
+  catch (e) { $("live-error").textContent = e.message; }
+  $("btn-listen").disabled = false;
+};
+
+$("btn-calibrate").onclick = async () => {
+  const b = $("btn-calibrate"); b.disabled = true; b.textContent = "Stay quiet…";
+  try { const r = await api("/api/calibrate", { method: "POST" }); $("live-error").textContent = r.warning || ""; b.textContent = `Gate set to ${r.gate_rms} (noise ${r.noise_rms.toFixed(1)})`; applyStatus(await api("/api/status")); }
+  catch (e) { $("live-error").textContent = e.message; b.textContent = "Calibrate noise (2 s)"; }
+  b.disabled = false; setTimeout(() => (b.textContent = "Calibrate noise (2 s)"), 4000);
+};
+
+// ---------- live stream ----------
+function connect() {
+  const es = new EventSource("/api/events");
+  es.onopen = () => { $("pill-conn").textContent = "connected"; $("pill-conn").className = "pill on"; };
+  es.onerror = () => { $("pill-conn").textContent = "reconnecting…"; $("pill-conn").className = "pill err"; };
+  es.onmessage = (msg) => {
+    const ev = JSON.parse(msg.data);
+    if (ev.type === "hello") applyStatus(ev);
+    else if (ev.type === "state") api("/api/status").then(applyStatus);
+    else if (ev.type === "frame") onFrame(ev);
+  };
+}
+
+let flashUntil = 0;
+function onFrame(ev) {
+  const pct = Math.max(0, Math.min(100, (dbfs(ev.rms) + 80) / 80 * 100));
+  $("level-fill").style.width = pct + "%";
+  $("level-fill").style.background = ev.rms >= settings.gate_rms ? css("--accent") : css("--muted");
+  $("level-text").textContent = `RMS ${ev.rms.toFixed(0)} · ${dbfs(ev.rms).toFixed(1)} dBFS`;
+  $("score-text").textContent = ev.score === null ? "silence (below gate)" : `score ${ev.score.toFixed(3)}`;
+  if (ev.latency_ms) $("pill-latency").textContent = `latency: ${ev.latency_ms.toFixed(1)} ms`;
+
+  scoreHistory.push({ t: ev.t, score: ev.score });
+  while (scoreHistory.length && ev.t - scoreHistory[0].t > 15) scoreHistory.shift();
+
+  const now = performance.now();
+  if (ev.detected) {
+    detCount++; $("det-count").textContent = `Detections: ${detCount}`;
+    flashUntil = now + 1200;
+    $("ind-small").textContent = `score ${ev.score.toFixed(3)} · ${ev.latency_ms.toFixed(1)} ms`;
+    api("/api/status").then((st) => renderLog(st.detections));
+  }
+  if (now < flashUntil) { $("indicator").className = "indicator hit"; $("ind-big").textContent = "MARVIN!"; }
+  else { $("indicator").className = "indicator"; $("ind-big").textContent = ev.score === null ? "Listening…" : "Listening"; $("ind-small").textContent = ev.score === null ? "quiet" : `score ${ev.score.toFixed(2)}`; }
+
+  drawScores(); drawSpectrogram(ev.spectrogram); drawWave(ev.envelope);
+}
+
+function fitCanvas(c) {
+  const r = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (c._w !== w || c._h !== h || c._r !== r) { c._r = r; c._w = w; c._h = h; c.width = w * r; c.height = h * r; }
+  const ctx = c.getContext("2d"); ctx.setTransform(r, 0, 0, r, 0, 0); return [ctx, w, h];
+}
+
+function drawScoreSeries(canvas, points, tMin, tMax, markers = []) {
+  const [ctx, w, h] = fitCanvas(canvas);
+  ctx.clearRect(0, 0, w, h);
+  const lo = -3, hi = 1.5;
+  const y = (s) => h - (Math.max(lo, Math.min(hi, s)) - lo) / (hi - lo) * h;
+  const x = (t) => (t - tMin) / Math.max(tMax - tMin, 1e-6) * w;
+  markers.forEach(([a, b]) => { ctx.fillStyle = css("--hit-soft"); ctx.fillRect(x(a), 0, Math.max(x(b) - x(a), 2), h); });
+  ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(0, y(0)); ctx.lineTo(w, y(0)); ctx.stroke();
+  ctx.setLineDash([5, 4]); ctx.strokeStyle = css("--warn"); ctx.beginPath(); ctx.moveTo(0, y(settings.threshold)); ctx.lineTo(w, y(settings.threshold)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.lineWidth = 2; ctx.strokeStyle = css("--accent"); ctx.beginPath();
+  let drawing = false;
+  points.forEach((p) => {
+    if (p.score === null) { drawing = false; return; }
+    if (!drawing) { ctx.moveTo(x(p.t), y(p.score)); drawing = true; } else ctx.lineTo(x(p.t), y(p.score));
+  });
+  ctx.stroke(); ctx.lineWidth = 1;
+  points.forEach((p) => { if (p.score !== null && p.score >= settings.threshold) { ctx.fillStyle = css("--hit"); ctx.beginPath(); ctx.arc(x(p.t), y(p.score), 3.5, 0, 7); ctx.fill(); } });
+  ctx.fillStyle = css("--muted"); ctx.font = "11px ui-monospace, monospace"; ctx.fillText("+1.5", 4, 12); ctx.fillText("0", 4, y(0) - 3); ctx.fillText("−3", 4, h - 4);
+}
+
+function drawScores() {
+  const now = scoreHistory.length ? scoreHistory[scoreHistory.length - 1].t : 0;
+  drawScoreSeries($("score-canvas"), scoreHistory, now - 15, now);
+}
+
+function drawSpectrogram(spec) {
+  const [ctx, w, h] = fitCanvas($("spec-canvas"));
+  if (!spec) return;
+  const n = spec.length, m = spec[0].length;
+  let lo = Infinity, hi = -Infinity;
+  spec.forEach((r) => r.forEach((v) => { lo = Math.min(lo, v); hi = Math.max(hi, v); }));
+  const cw = w / n, ch = h / m;
+  for (let i = 0; i < n; i++) for (let j = 0; j < m; j++) {
+    const v = (spec[i][j] - lo) / Math.max(hi - lo, 1e-6);
+    ctx.fillStyle = `hsl(${220 - 180 * v}, 70%, ${15 + 55 * v}%)`;
+    ctx.fillRect(i * cw, h - (j + 1) * ch, cw + 1, ch + 1);
+  }
+}
+
+function drawWave(env) {
+  const [ctx, w, h] = fitCanvas($("wave-canvas"));
+  ctx.clearRect(0, 0, w, h);
+  if (!env) return;
+  const peak = Math.max(...env, 1), bw = w / env.length;
+  ctx.fillStyle = css("--accent");
+  env.forEach((v, i) => { const bh = v / peak * (h - 4); ctx.fillRect(i * bw, (h - bh) / 2, Math.max(bw - 1, 1), bh); });
+}
+
+// ---------- manual tests ----------
+document.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("active", x === b));
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.id === b.dataset.tab));
+});
+
+const expectTag = (e) => e === 1 ? '<span class="tag yes">marvin</span>' : e === -1 ? '<span class="tag no">other</span>' : "–";
+
+async function loadSamples() {
+  const d = await api("/api/samples");
+  $("sample-rows").innerHTML = d.samples.map((s) => `<tr><td>${s.name}</td><td>${expectTag(s.expected)}</td><td style="text-align:right;white-space:nowrap"><button data-play="${s.name}">▶</button> <button data-analyze="${s.name}">Analyse</button></td></tr>`).join("");
+  document.querySelectorAll("[data-play]").forEach((b) => b.onclick = () => new Audio("/samples/" + b.dataset.play).play());
+  document.querySelectorAll("[data-analyze]").forEach((b) => b.onclick = () => runAnalysis(b, () => api("/api/analyze/sample/" + encodeURIComponent(b.dataset.analyze), { method: "POST" })));
+}
+
+async function runAnalysis(button, fn) {
+  const label = button.textContent; button.disabled = true; button.textContent = "…"; $("test-error").textContent = "";
+  try { showResult(await fn()); } catch (e) { $("test-error").textContent = e.message; }
+  button.disabled = false; button.textContent = label;
+}
+
+function showResult(r) {
+  $("result").style.display = "block";
+  $("res-name").textContent = r.name;
+  $("res-verdict").textContent = r.detected ? `✅ “Marvin” detected (${r.events.length}×)` : "❌ No “Marvin”";
+  $("res-verdict").className = "verdict " + (r.detected ? "yes" : "no");
+  const events = r.events.map((e) => `${e.start.toFixed(2)}–${e.end.toFixed(2)} s (score ${e.score.toFixed(2)})`).join(", ");
+  $("res-details").innerHTML = `length ${r.duration.toFixed(2)} s · ${r.windows.length} windows · max score ${r.max_score === null ? "– (silent)" : r.max_score.toFixed(3)} · ${r.ms_per_window.toFixed(2)} ms/window` + (events ? `<br>events: ${events}` : "");
+  const pts = r.windows.map((w) => ({ t: w.t + 0.5, score: w.score }));
+  drawScoreSeries($("res-canvas"), pts, 0, Math.max(r.duration, 1), r.events.map((e) => [e.start, e.end]));
+  $("res-audio").src = r.url;
+}
+
+$("btn-selftest").onclick = async () => {
+  const b = $("btn-selftest"); b.disabled = true; b.textContent = "Running…"; $("test-error").textContent = "";
+  try {
+    const d = await api("/api/selftest", { method: "POST" });
+    const f = (v) => v === null ? "–" : v.toFixed(2);
+    $("selftest-summary").textContent = `${d.passed}/${d.total} correct · precision ${f(d.precision)} · recall ${f(d.recall)} · ${d.avg_ms_per_window.toFixed(2)} ms per window`;
+    $("selftest-rows").innerHTML = d.rows.map((r) => `<tr><td>${r.name}</td><td>${expectTag(r.expected)}</td><td>${expectTag(r.got)}</td><td class="num">${r.max_score === null ? "–" : r.max_score.toFixed(2)}</td><td><span class="tag ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"}</span></td></tr>`).join("");
+  } catch (e) { $("test-error").textContent = e.message; }
+  b.disabled = false; b.textContent = "Run self-test";
+};
+
+$("btn-record").onclick = () => {
+  const s = Number($("rec-seconds").value) || 4;
+  const b = $("btn-record");
+  runAnalysis(b, async () => { b.textContent = `Recording ${s} s — speak now…`; return api(`/api/record?seconds=${s}`, { method: "POST" }); });
+};
+
+$("btn-upload").onclick = () => {
+  const file = $("upload-file").files[0];
+  if (!file) { $("test-error").textContent = "Choose a .wav file first"; return; }
+  const form = new FormData(); form.append("file", file);
+  runAnalysis($("btn-upload"), () => api("/api/analyze/upload", { method: "POST", body: form }));
+};
+
+// ---------- boot ----------
+(async () => {
+  try { applyStatus(await api("/api/status")); } catch (e) { $("live-error").textContent = e.message; }
+  await loadDevices(); await loadSamples(); connect();
+  window.addEventListener("resize", () => { drawScores(); });
+})();
+</script>
+</body>
+</html>

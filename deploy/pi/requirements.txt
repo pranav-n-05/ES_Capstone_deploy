@@ -1,0 +1,8 @@
+# Raspberry Pi 4 Model B, Raspberry Pi OS 64-bit (Bookworm / Trixie), Python 3.11+
+# System packages first: sudo apt install libportaudio2 alsa-utils
+# setup_pi.sh installs the TFLite runtime (ai-edge-litert, falling back to tflite-runtime).
+numpy>=1.24
+scipy>=1.10
+python-speech-features==0.6
+sounddevice>=0.4.6
+flask>=2.3

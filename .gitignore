@@ -146,3 +146,4 @@ input/
 
 input/speech_commands/
 input/*cache*
+deploy/pi/recordings/
